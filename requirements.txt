@@ -1,0 +1,6 @@
+numba
+numpy
+scipy
+torch
+tntorch
+matplotlib
