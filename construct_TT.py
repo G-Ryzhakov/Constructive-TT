@@ -15,7 +15,7 @@ def main_core(f, n, m):
 
 def main_core_list(f, n, m):
     """
-    Строит функциональное ядро, предполагается, что
+    Constructs a functional core, it is assumed that
     f: [0, n-1] -> [0, m-1]
     """
     
