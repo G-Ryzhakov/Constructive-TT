@@ -246,6 +246,13 @@ class Sparse3D():
 
         return txt
 
+    @property
+    def nnz(self):
+        return sum([i.nnz for i in self.mats])
+
+    def __repr__(self):
+        return f"Sp3D core {self.shape}, {self.nnz} nnz"
+
 
 def is_perm_mat(mat):
     mcoo = mat.tocoo()
@@ -1052,8 +1059,8 @@ class tens(object):
 
         elif mid == 0:
             def outF(H):
-                v2 = rfs[0](H[d-1], H[d-2])
-                for i, f in enumerate(rfs[1:], start=3):
+                v2 = rfs[0](H[d-2], H[d-3])
+                for i, f in enumerate(rfs[1:], start=4):
                     v2 = f(v2, H[d-i])
 
                 return  np.asarray(v2)
@@ -1072,7 +1079,7 @@ class tens(object):
             info["mults"] += cinfo['muls']
 
 
-            def outF(H):
+            def outF(H): # NOTE! Input H is of dimension d-2 
                 if len(lfs) > 0:
                     v1 = lfs[0](H[0], H[1])
                     for i, f in enumerate(lfs[1:], start=2):
@@ -1082,11 +1089,11 @@ class tens(object):
 
 
                 if len(rfs) > 0:
-                    v2 = rfs[0](H[d-1], H[d-2])
-                    for i, f in enumerate(rfs[1:], start=3):
+                    v2 = rfs[0](H[d-2], H[d-3])
+                    for i, f in enumerate(rfs[1:], start=4):
                         v2 = f(v2, H[d-i])
                 else:
-                    v2 = np.array(H[d-1])
+                    v2 = np.array(H[d-2])
 
                 if mid_l2r:
                     res = mf(np.asarray(v1), np.asarray(v2))
