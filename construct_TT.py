@@ -865,7 +865,7 @@ class tens(object):
 
                 lf = eval(f'lambda a, u: {txt}')
                 if use_numba:
-                    lf = numba.njit(lf)
+                    lf = njit(lf)
 
                 llist.append(lf)
 
