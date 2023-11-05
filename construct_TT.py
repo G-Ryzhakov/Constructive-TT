@@ -51,13 +51,103 @@ class Sparse3D():
             i, k, j = idx
             self.mats[k][i, j] = val
 
-
+    @property
     def full(self):
-        res = np.empty(self.shape, dtype=self.dtype)
+        res = np.empty(self.shape, dtype=self.mats[0].dtype)
         for i, mat in enumerate(self.mats):
-            mat.todense(out=res[:, i, :])
+            mat.tolil().todense(out=res[:, i, :])
 
         return res
+
+    def make_mat(self, full=False, dtype=None):
+        if dtype is None:
+            dtype = self.dtype
+        r1, n, r2 = self.shape
+        res = None
+        if r1 == 1:
+            res = scipy.sparse.lil_array((n, r2), dtype=dtype)
+            for mi, m in enumerate(self.mats):
+                mcoo = m.tocoo()
+                for i, j in zip(mcoo.col, mcoo.data):
+                    res[mi, i] = j
+        elif r2 == 1:
+            res = scipy.sparse.lil_array((r1, n), dtype=dtype)
+            for mi, m in enumerate(self.mats):
+                mcoo = m.tocoo()
+                for i, j in zip(mcoo.row, mcoo.data):
+                    res[i, mi] = j
+
+        else:
+            assert False, "No mat!"
+
+        if res is not None and full:
+            res = res.todense()
+
+        return res
+
+
+    def mul(self, other, left=False):
+        for mi, m in enumerate(self.mats):
+            if left:
+                self.mats[mi] = (other @ m).tolil()
+            else:
+                self.mats[mi] = (m @ other).tolil()
+
+    def set_type(self, dtype):
+        self.mats = [m.astype(dtype) for m in self.mats]
+
+    def to_alg(self, l2r=True, cstyle=True, info=None, brakets="()"):
+        if l2r:
+            mats = self.mats
+        else:
+            mats = [m.T for m in self.mats]
+
+        if info is None:
+            info = dict()
+
+        r1, r2 = mats[0].shape
+        res  = [[] for _ in range(r2)]
+        for i, m in enumerate(mats):
+            ss = f"u[{i}]*"
+            res_cur = dict()
+            m = m.tocoo()
+            for c, r, val in zip(m.col, m.row, m.data):
+                if val == 0:
+                    continue
+
+                if val != 1:
+                    addstr = f"*{val}"
+                else:
+                    addstr = ""
+
+                res_cur[c] = res_cur.get(c, []) + [f"a[{r}]" + addstr]
+
+            for c, vv in res_cur.items():
+                if len(vv) > 1:
+                    mn = "(" + " + ".join(vv) + ")"
+                else:
+                    mn = vv[0]
+
+                res[c].append(ss + mn)
+
+        if cstyle:
+            txt = ""
+            for i, v in enumerate(res):
+                ll = " + ".join(v)
+                txt += f"o[{i}] = {ll};\n"
+
+        else:
+            txt = brakets[0]
+            for i, v in enumerate(res):
+                ll = " + ".join(v)
+                txt += ll + ", "
+
+            txt += brakets[1]
+
+        info["muls"] = txt.count("*")
+
+        return txt
+
 
 
 def G0(n):
@@ -737,6 +827,23 @@ class tens(object):
     def indices(self, indices):
         #print("Don't bother me!")
         self._indices = indices
+
+
+    def make_tails_identity(self, sparse=True):
+        if sparse:
+            G0 = self.cores_sparse[0].make_mat(dtype=int)
+            self.cores_sparse[1].mul(G0, left=True)
+            self.cores_sparse[0].mul(scipy.sparse.linalg.inv(G0.tocsc()), left=False)
+
+            G1 = self.cores_sparse[-1].make_mat(dtype=int)
+            self.cores_sparse[-2].mul(G1, left=False)
+            self.cores_sparse[-1].mul(scipy.sparse.linalg.inv(G1.tocsc()), left=True)
+
+            self.cores_sparse[0].set_type(int)
+            self.cores_sparse[-1].set_type(int)
+
+            return self.cores_sparse
+
 
 
     @property
