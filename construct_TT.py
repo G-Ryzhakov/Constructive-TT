@@ -59,7 +59,7 @@ class Sparse3D():
 
         return res
 
-    def make_mat(self, full=False, dtype=None):
+    def to_mat(self, full=False, dtype=None):
         if dtype is None:
             dtype = self.dtype
         r1, n, r2 = self.shape
@@ -160,6 +160,117 @@ class Sparse3D():
 
         return txt
 
+
+    def to_alg_fin(self, l2r=True, cstyle=True, info=None, brakets="()", extra_info=True, letters='abo'):
+        """
+        out var is the middle var of the core (dim `n`)
+        l2r doesnot affect on result, but may affect on number of operation
+        """
+
+        if len(letters) == 3 and cstyle:
+            la, lb, lo = letters
+        else:
+            la, lb = letters[:2]
+
+        if l2r:
+            mats = self.mats
+        else:
+            mats = [m.T for m in self.mats]
+
+        if info is None:
+            info = dict()
+            extra_info = False
+
+
+        r1, r2 = mats[0].shape
+        res  = [[] for _ in range(len(mats))]
+        a_list = []
+        b_list = []
+        for i, m in enumerate(mats):
+            res_cur = dict()
+            m = m.tocoo()
+            for c, r, val in zip(m.col, m.row, m.data):
+                if val == 0:
+                    continue
+
+                if val != 1:
+                    addstr = f"*{val}"
+                else:
+                    addstr = ""
+
+                if extra_info:
+                    if not r in a_list:
+                        a_list.append(r)
+                    if not c in b_list:
+                        b_list.append(c)
+
+                res_cur[c] = res_cur.get(c, []) + [la + f"[{r}]" + addstr]
+
+            res[i] = []
+            for c, vv in res_cur.items():
+                ss = lb + f"[{c}]*"
+                if len(vv) > 1:
+                    mn = "(" + " + ".join(vv) + ")"
+                else:
+                    mn = vv[0]
+
+                res[i].append(ss + mn)
+
+        if extra_info:
+            in_dim = max(a_list) + 1
+            info["in_dim"] = in_dim
+            info["in_dim_missing"] = np.setdiff1d(np.arange(in_dim), a_list)
+
+            in_dim2 = max(b_list) + 1
+            info["in_dim2"] = in_dim2
+            info["in_dim_missing2"] = np.setdiff1d(np.arange(in_dim2), b_list)
+
+
+
+        info["out_dim"] = len(res)
+        if cstyle:
+            txt = ""
+            for i, v in enumerate(res):
+                ll = " + ".join(v)
+                txt += lo + f"[{i}] = {ll};\n"
+
+        else:
+            txt = brakets[0]
+            for i, v in enumerate(res):
+                ll = " + ".join(v)
+                txt += ll + ", "
+
+            txt += brakets[1]
+
+        info["muls"] = txt.count("*")
+
+        return txt
+
+
+def is_perm_mat(mat):
+    mcoo = mat.tocoo()
+    rd = dict()
+    cd = dict()
+    cnt = 0
+    for r, c, val in zip(mcoo.row, mcoo.row, mcoo.data):
+        if val == 0:
+            continue
+           
+        cnt += 1
+        if val != 1:
+            return False
+    
+        if r in rd:
+            return False
+        rd[r] = 1
+        
+        if c in cd:
+            return False
+
+        cd[c] = 1
+        
+    
+    return len(rd) == len(cd) == cnt
 
 
 def G0(n):
@@ -841,7 +952,7 @@ class tens(object):
         self._indices = indices
 
 
-    def make_func_for_convolv(self, mid=-2, use_numba=False, info=None):
+    def make_func_for_convolv(self, mid=-1, use_numba=False, info=None):
         cores = self.make_tails_identity()
 
         d = len(cores)
@@ -851,12 +962,12 @@ class tens(object):
         if info is None:
             info = dict()
 
-        assert 0 <= mid < d - 1, "Bad middle core"
+        assert 0 < mid < d, "Bad middle core"
 
         mults = 0
         lfs = []
         rfs = []
-        for gen, llist, l2r in zip([range(1, mid+1), range(d-2, mid, -1)], [lfs, rfs], [True, False]):
+        for gen, llist, l2r in zip([range(1, mid), range(d-2, mid-1, -1)], [lfs, rfs], [True, False]):
             for i in gen:
                 cinfo = dict()
                 txt = cores[i].to_alg(l2r=l2r, cstyle=False, brakets="[]", info=cinfo,  extra_info=False)
@@ -896,15 +1007,116 @@ class tens(object):
         return outF
 
 
+
+    def make_func_for_convolv_vec(self, mid=0, mid_l2r=True, use_numba=False, info=None):
+        cores = self.make_tails_identity()
+
+        d = len(cores)
+        if mid < 0:
+            mid += d
+
+        if info is None:
+            info = dict()
+
+        assert 0 <= mid < d , "Bad middle core"
+
+
+        mults = 0
+        lfs = []
+        rfs = []
+        for gen, llist, l2r in zip([range(1, mid), range(d-2, max(mid, 0), -1)], [lfs, rfs], [True, False]):
+            for i in gen:
+                cinfo = dict()
+                txt = cores[i].to_alg(l2r=l2r, cstyle=False, brakets="[]", info=cinfo,  extra_info=False)
+                if use_numba:
+                    txt = f"np.array({txt})"
+
+                lf = eval(f'lambda a, u: {txt}')
+                if use_numba:
+                    lf = njit(lf)
+
+                llist.append(lf)
+
+                mults += cinfo['muls']
+
+        info["mults"] = mults
+
+
+        if mid == d-1:
+            def outF(H):
+                v1 = lfs[0](H[0], H[1])
+                for i, f in enumerate(lfs[1:], start=2):
+                    v1 = f(v1, H[i])
+
+                return  np.asarray(v1)
+
+        elif mid == 0:
+            def outF(H):
+                v2 = rfs[0](H[d-1], H[d-2])
+                for i, f in enumerate(rfs[1:], start=3):
+                    v2 = f(v2, H[d-i])
+
+                return  np.asarray(v2)
+
+        else:
+
+            txt = cores[mid].to_alg_fin(l2r=mid_l2r, cstyle=False, brakets="[]", info=cinfo,  extra_info=False)
+            if use_numba:
+                txt = f"np.array({txt})"
+
+            mf = eval(f'lambda a, b: {txt}')
+            if use_numba:
+                mf = njit(mf)
+
+
+            info["mults"] += cinfo['muls']
+
+
+            def outF(H):
+                if len(lfs) > 0:
+                    v1 = lfs[0](H[0], H[1])
+                    for i, f in enumerate(lfs[1:], start=2):
+                        v1 = f(v1, H[i])
+                else:
+                    v1 = np.array(H[0])
+
+
+                if len(rfs) > 0:
+                    v2 = rfs[0](H[d-1], H[d-2])
+                    for i, f in enumerate(rfs[1:], start=3):
+                        v2 = f(v2, H[d-i])
+                else:
+                    v2 = np.array(H[d-1])
+
+                if mid_l2r:
+                    res = mf(np.asarray(v1), np.asarray(v2))
+                else:
+                    res = mf(np.asarray(v2), np.asarray(v1))
+
+
+                return  res
+
+        return outF
+
+
+
+
     def make_tails_identity(self, sparse=True):
         if sparse:
-            G0 = self.cores_sparse[0].make_mat() # (dtype=int)
-            G0_inv = scipy.sparse.linalg.inv(G0.tocsc())
+            G0 = self.cores_sparse[0].to_mat() # (dtype=int)
+            if is_perm_mat(G0):
+                G0_inv = G0.T
+            else:
+                G0_inv = scipy.sparse.linalg.inv(G0.tocsc())
+
             self.cores_sparse[1].mul(G0_inv.T, left=True)
             self.cores_sparse[0].mul(G0_inv, left=False)
 
-            G1 = self.cores_sparse[-1].make_mat() #dtype=int)
-            G1_inv = scipy.sparse.linalg.inv(G1.tocsc())
+            G1 = self.cores_sparse[-1].to_mat() #dtype=int)
+            if is_perm_mat(G1):
+                G1_inv = G1.T
+            else:
+                G1_inv = scipy.sparse.linalg.inv(G1.tocsc())
 
             self.cores_sparse[-2].mul(G1_inv.T, left=False)
             self.cores_sparse[-1].mul(G1_inv, left=True)
