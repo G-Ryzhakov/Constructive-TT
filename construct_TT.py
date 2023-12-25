@@ -466,9 +466,9 @@ def matrix_svd(M, delta=1E-8, rmax=None, ckeck_zero=True):
 
 
 
-def show(Y):
-    N = [G.shape[1] for G in Y]
-    R = [G.shape[0] for G in Y] + [1]
+def show(N, R):
+    # N = [G.shape[1] for G in Y]
+    # R = [G.shape[0] for G in Y] + [1]
     l = max(int(np.ceil(np.log10(np.max(R)+1))) + 1, 3)
     form_str = '{:^' + str(l) + '}'
     s0 = ' '*(l//2)
@@ -1192,33 +1192,35 @@ class tens(object):
     def index_revrse(self):
         self._indices = reindex(self._indices)
 
-    @property
     def shapes(self, func_shape=False):
         if func_shape:
-            return np.array([len(i) for i in self.funcs])
+            return np.array([i.shape[0] for i in self.indices[0]] + [ len(self.funcs_vals) ] + [i.shape[0] for i in self.indices[1]][::-1])
         else:
             return np.array([i.shape[1] for i in self.cores])
+
+
+    def ranks(self, func_shape=False):
+        if func_shape:
+            return np.array( [1] + [i.max() + 1 for i in self.indices[0]] + [i.max() + 1 for i in self.indices[1]][::-1] + [1] )
+        else:
+            return np.array([1] + [G.shape[-1] for G in Y])
 
 
     @property
     def erank(self):
         """Compute effective rank of the TT-tensor."""
-        Y = self.cores
-
-        if not Y:
-            return None
-
-        d = len(Y)
-        N = self.shapes
-        R = np.array([1] + [G.shape[-1] for G in Y])
-
+        N = self.shapes(True)
+        R = self.ranks(True)
         sz = np.dot(N * R[:-1], R[1:])
         b = N[0] + N[-1]
         a = np.sum(N[1:-1])
         return (np.sqrt(b * b + 4 * a * sz) - b) / (2 * a)
 
     def show(self):
-        show(self.cores)
+        # show(self.cores)
+        N = self.shapes(func_shape=True)
+        R = self.ranks(True)
+        show(N, R)
 
     def show_TeX(self, delim="---"):
         rnks = [i.shape[0] for i in self.cores] + [1]
