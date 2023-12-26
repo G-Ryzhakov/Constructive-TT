@@ -959,6 +959,47 @@ class tens(object):
         self._indices = indices
 
 
+    def get(self, idx, use_mid=None, use_cores=False):
+        if use_mid is None:
+            use_mid = use_cores
+
+        assert len(idx) == self.d, f"Wrong idx length: {len(idx)} != {self.d}"
+
+        if use_cores:
+            cores = self.cores
+            G = cores[0][0, idx[0]]
+            for Y, ii in zip(cores[1:], idx[1:]):
+                G = G @ Y[:, ii, :]
+
+            return G.item()
+
+        else: # use indeces
+            def get_val(indeces, idx):
+                val = 0
+                for ind, ii in zip(indeces, idx):
+                    val = ind[ii][val]
+                    if val < 0:
+                        return -1
+                return val
+
+            val_l = get_val(self.indices[0], idx)
+            if val_l < 0:
+                return 0
+            val_r = get_val(self.indices[1], idx[::-1])
+            if val_r < 0:
+                return 0
+
+            pos = self.pos_val_core
+            k = idx[pos]
+            if use_mid:
+                mid_core = self.core(pos, skip_build=True)
+                return mid_core[val_l, k,  val_r]
+            else: # get value from the func
+                vals_in, vals_out = self.indices[2]
+                return self.funcs_vals[k](vals_in[val_l], vals_in[val_r]) or 0
+
+
+
     def make_func_for_convolv(self, mid=-1, use_numba=False, info=None):
         cores = self.make_tails_identity()
 
