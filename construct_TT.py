@@ -262,21 +262,21 @@ def is_perm_mat(mat):
     for r, c, val in zip(mcoo.row, mcoo.row, mcoo.data):
         if val == 0:
             continue
-           
+
         cnt += 1
         if val != 1:
             return False
-    
+
         if r in rd:
             return False
         rd[r] = 1
-        
+
         if c in cd:
             return False
 
         cd[c] = 1
-        
-    
+
+
     return len(rd) == len(cd) == cnt
 
 
@@ -786,6 +786,30 @@ def _TT_func_mat_mul(mat, idx, res, direction=True):
 def make_two_arg(func):
     return lambda x, y: func(x)
 
+def reindex_None(idx):
+    res = []
+    for i, col in enumerate(idx.T):
+        nqu = np.unique(col)
+        if len(nqu) == 1 and nqu[0] == -1:
+            res.append(i)
+
+    n = idx.shape[1]
+    res = np.array(res)
+    return res, idx[:, np.setdiff1d(np.arange(n), res)]
+
+
+def reindex_None_all(idxs):
+    d = len(idxs)
+    for i in range(d-1, -1, -1):
+        bad_idx, idxs[i] = reindex_None(idxs[i])
+        if i > 0:
+            idx_prev = idxs[i - 1]
+            for bi in sorted(bad_idx)[::-1]:
+                idx_prev[idx_prev == bi] = -1
+                idx_prev[idx_prev > bi] -= 1
+
+            idxs[i - 1] = idx_prev
+
 class tens(object):
 
     def mat_mul(self, n, i, mat, direction=True, res=None):
@@ -876,7 +900,8 @@ class tens(object):
         return cs
 
 
-    def __init__(self, funcs=None, indices=None, do_reverse=False, do_truncate=False,
+    def __init__(self, funcs=None, indices=None,
+                 do_reverse=False, do_truncate=False, do_None_clean=False,
                  v_in=None, debug=True, relative_eps=None, max_rank=None):
         if type(funcs[0][0]) == list: # new
             self.funcs_left  = funcs[0]
@@ -903,6 +928,7 @@ class tens(object):
         self.d = len(self.funcs_left) + len(self.funcs_right) + 1
         self.pos_val_core = len(self.funcs_left)
         self.do_reverse = do_reverse
+        self.do_None_clean = do_None_clean
         self.do_truncate = do_truncate and not self.funcs_right
         self._cores = None
         self._cores_sparse = None
@@ -929,27 +955,26 @@ class tens(object):
 
         self._indices = []
 
-        v_in = [self.v_in]
-        idxx_a = []
-        for func in self.funcs_left:
-            v_in, idxx = next_indices(func, v_in, max_rank=self.max_rank, relative_eps=self.relative_eps)
-            idxx_a.append(idxx)
+        def build_i(funcs):
+            v_in = [self.v_in]
+            idxx_a = []
+            for func in funcs:
+                v_in, idxx = next_indices(func, v_in, max_rank=self.max_rank, relative_eps=self.relative_eps)
+                idxx_a.append(idxx)
+                if self.do_None_clean:
+                    reindex_None_all(idxx_a)
 
-        v_out_left = v_in
+            v_out_left = v_in
+            return idxx_a, v_in
+
+
+        idxx_a, v_out_left = build_i(self.funcs_left)
         self._indices.append(idxx_a)
 
-        v_in = [self.v_in]
-        idxx_a = []
-        for func in self.funcs_right:
-            v_in, idxx = next_indices(func, v_in, max_rank=self.max_rank, relative_eps=self.relative_eps)
-            idxx_a.append(idxx)
-
-
-        v_out_right = v_in
+        idxx_a, v_out_right = build_i(self.funcs_right)
         self._indices.append(idxx_a)
 
         self._indices.append([v_out_left,  v_out_right])
-
 
         return  self._indices
 
@@ -1120,7 +1145,7 @@ class tens(object):
             info["mults"] += cinfo['muls']
 
 
-            def outF(H): # NOTE! Input H is of dimension d-2 
+            def outF(H): # NOTE! Input H is of dimension d-2
                 if len(lfs) > 0:
                     v1 = lfs[0](H[0], H[1])
                     for i, f in enumerate(lfs[1:], start=2):
