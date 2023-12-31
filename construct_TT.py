@@ -967,9 +967,9 @@ class tens(object):
             for func in funcs:
                 v_in, idxx = next_indices(func, v_in, max_rank=self.max_rank, relative_eps=self.relative_eps)
                 idxx_a.append(idxx)
-                if self.do_None_clean:
-                    reindex_None_all(idxx_a)
 
+            if self.do_None_clean:
+                reindex_None_all(idxx_a)
             v_out_left = v_in
             return idxx_a, v_in
 
@@ -1342,6 +1342,17 @@ class tens(object):
 
         self._cores = Z
 
+    def reindex_None(self, num=None):
+        if num is None:
+            num = [0, 1]
+        if isinstance(num, int):
+            num = [num]
+        for n in num:
+            idxss = self.indices[n]
+            if idxss:
+               reindex_None_all(idxss)
+
+
     def simple_mean(self):
         Y = self.cores
         G0 = Y[0]
@@ -1426,6 +1437,30 @@ class tens(object):
             print(c[:, i, :])
 
 
+    def mul(t1, t2):
+        """
+        Hadamard multiply of two indices TT using only indices
+        """
+
+        assert t1.indicator and t2.indicator, "Use kron of cores to multiply common tensors"
+
+        ranks1 = t1.ranks(True)[:-1]
+        ranks2 = t2.ranks(True)
+        shapes = t1.shapes(True)
+
+        res = []
+        for r1, r2, n in zip(ranks1, ranks2[:-1], shapes):
+            res.append(np.full( [n, r1*r2], -1 ))
+
+        for idx_res, idx1, idx2, r in zip(res, t1.indices[0], t2.indices[0], ranks2[1:]):
+            for out, i1, i2 in zip(idx_res, idx1, idx2):
+                kron2idx(i1, i2, r, out)
+
+        full_clean_idx(res)
+
+        return tens(gen_f_idxs(res), indices=[res, [], []], indicator=True, v_in=(1, ), debug=t1.debug, max_rank=t1.max_rank)
+
+
 
 def mult_and_mean(Y1, Y2):
     G0 = Y1[0][:, None, :, :, None] * Y2[0][None, :, :, None, :]
@@ -1462,16 +1497,17 @@ def partial_mean(Y):
         return G0
 
 
-def reverse_idxs(idxs, dtype=int, show=False):
+def gen_f_idxs(idxs, dtype=int):
+    """
+    Generate funcs that can generate the given idxs
+    """
     d = len(idxs)
     ranks = [1] + [i.max() + 1 for i in idxs]
     def gen_f(i, pos, last):
         idx = idxs[pos][i]
         r = ranks[pos]
         def f(x):
-            #res = [0]*r
             res = np.zeros(r, dtype=dtype)
-            #x = np.array(x, dtype=int)
             for i, elem in enumerate(idx):
                 if elem < 0:
                     continue
@@ -1489,13 +1525,53 @@ def reverse_idxs(idxs, dtype=int, show=False):
         return f
 
 
-    ff = [[gen_f(i, pos, pos==0)
+    return [[gen_f(i, pos, pos==0)
            for i, _ in enumerate(idxs[pos])]
              for pos in range(d-1, -1, -1)]
 
+
+def reverse_idxs(idxs, dtype=int, show=False):
+    """
+    reverse flow, expecting  truncation of thi
+    """
+    ff = gen_f_idxs(idxs, dtype=dtype)
     tt = tens(ff, v_in=(1, ), indicator=True)
     if show:
         tt.show()
     return tt.indices[0]
 
+
+def full_clean_idx(res):
+    """
+    Sort of truncation if indices format
+    """
+    prev = np.array([0], dtype=int)
+    for ir, rr in enumerate(res):
+
+        add = -1 if -1 in prev else 0
+        if ir > 0:
+            res[ir-1] = np.searchsorted(prev, res[ir-1], side='left') + add
+
+        if add < 0:
+            prev = prev[prev >= 0]
+
+        res[ir] = rr = rr[:, prev]
+
+
+        rr_f = rr.reshape(-1)
+        prev = np.unique(rr_f)
+
+def kron2idx(idx1, idx2, r, out):
+    """
+    Kronecker product of cores in indices format
+    """
+    r1, r2 = len(idx1), len(idx2)
+    mask = idx2 >=0
+    for pos, i1 in zip(range(0, r1*r2, r2), idx1):
+        if i1 == -1:
+            continue
+
+        idx2n = out[pos:pos + r2]
+        idx2n[:] = idx2
+        idx2n[mask] += i1*r
 
