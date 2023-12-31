@@ -980,7 +980,7 @@ class tens(object):
         if self.indicator:
             idx_mid = np.copy(idxx_a[-1])
             for i, val in enumerate(v_out_left):
-                assert val in [0, 1]
+                # assert val in [0, 1]
                 idxx_a[-1][idx_mid==i] = val - 1
 
             self._indices.extend([idxx_a, [], []])
@@ -1027,7 +1027,7 @@ class tens(object):
             if val_l < 0:
                 return 0
             if self.indicator:
-                return val_l + 1 # 9 or 1
+                return val_l + 1 # 0 or 1 or more
 
             val_r = get_val(self.indices[1], idx[::-1])
             if val_r < 0:
