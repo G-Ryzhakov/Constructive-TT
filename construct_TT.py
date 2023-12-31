@@ -697,7 +697,7 @@ def build_cores_by_indices(idxx, left_to_right=True, sparse=False):
     for i, idx in enumerate(idxx):
         n = idx.shape[0]
         r0 = idx.shape[1]
-        r1 = idx.max() + 1
+        r1 = max(idx.max() + 1, 1)
         if not left_to_right:
             r1, r0 = r0, r1
 
@@ -740,7 +740,7 @@ def TT_func_mat_vec(vec, idx, res=None, direction=True):
     num_sum = 0
     if res is None:
         res_len = idx.max() + 1
-        res = np.zeros(res_len)
+        res = np.zeros(res_len, dtype=vec.dtype)
     if direction:
         for i, v in enumerate(idx):
             if v >= 0:
@@ -900,15 +900,19 @@ class tens(object):
         return cs
 
 
-    def __init__(self, funcs=None, indices=None,
+    def __init__(self, funcs=None, *, indices=None, indicator=False,
                  do_reverse=False, do_truncate=False, do_None_clean=False,
                  v_in=None, debug=True, relative_eps=None, max_rank=None):
+
+        self.indicator = False # no need in mid tensor, use only indices
         if type(funcs[0][0]) == list: # new
             self.funcs_left  = funcs[0]
             self.funcs_right = funcs[1]
             self.funcs_vals  = funcs[2]
         else:
-            self.funcs_left  = funcs[:-1]
+            self.indicator = indicator # no need in mid tensor, use only indices
+
+            self.funcs_left  = funcs if indicator else funcs[:-1]
             self.funcs_right = []
             self.funcs_vals = []
             _="""
@@ -924,8 +928,10 @@ class tens(object):
             """
             self.funcs_vals = [make_two_arg(i) for i in funcs[-1]]
 
+
+
         #self.funcs = funcs
-        self.d = len(self.funcs_left) + len(self.funcs_right) + 1
+        self.d = len(self.funcs_left) + len(self.funcs_right) + (not self.indicator)
         self.pos_val_core = len(self.funcs_left)
         self.do_reverse = do_reverse
         self.do_None_clean = do_None_clean
@@ -969,12 +975,22 @@ class tens(object):
 
 
         idxx_a, v_out_left = build_i(self.funcs_left)
-        self._indices.append(idxx_a)
+        # self._indices.append(idxx_a)
 
-        idxx_a, v_out_right = build_i(self.funcs_right)
-        self._indices.append(idxx_a)
+        if self.indicator:
+            idx_mid = np.copy(idxx_a[-1])
+            for i, val in enumerate(v_out_left):
+                assert val in [0, 1]
+                idxx_a[-1][idx_mid==i] = val - 1
 
-        self._indices.append([v_out_left,  v_out_right])
+            self._indices.extend([idxx_a, [], []])
+        else:
+            self._indices.append(idxx_a)
+
+            idxx_a, v_out_right = build_i(self.funcs_right)
+            self._indices.append(idxx_a)
+
+            self._indices.append([v_out_left,  v_out_right])
 
         return  self._indices
 
@@ -1010,9 +1026,13 @@ class tens(object):
             val_l = get_val(self.indices[0], idx)
             if val_l < 0:
                 return 0
+            if self.indicator:
+                return val_l + 1 # 9 or 1
+
             val_r = get_val(self.indices[1], idx[::-1])
             if val_r < 0:
                 return 0
+
 
             pos = self.pos_val_core
             k = idx[pos]
@@ -1206,9 +1226,11 @@ class tens(object):
         if self._cores_sparse is None:
 
             cores_left  = build_cores_by_indices(self.indices[0], left_to_right=True, sparse=True)
-            cores_right = build_cores_by_indices(self.indices[1], left_to_right=False, sparse=True)
-            core_val = build_core_by_vals(self.funcs_vals, self.indices[2], sparse=True)
-            self._cores_sparse = cores_left + [core_val] + cores_right[::-1]
+            self._cores_sparse = cores_left
+            if not self.indicator:
+                cores_right = build_cores_by_indices(self.indices[1], left_to_right=False, sparse=True)
+                core_val = build_core_by_vals(self.funcs_vals, self.indices[2], sparse=True)
+                self._cores_sparse = cores_left + [core_val] + cores_right[::-1]
 
         return self._cores_sparse
 
@@ -1218,19 +1240,22 @@ class tens(object):
         if self._cores is None:
 
             cores_left  = build_cores_by_indices(self.indices[0], left_to_right=True)
-            cores_right = build_cores_by_indices(self.indices[1], left_to_right=False)
-            try:
-                core_val = self.mid_core
-            except:
-                core_val = build_core_by_vals(self.funcs_vals, self.indices[2])
-            self._cores = cores_left + [core_val] + cores_right[::-1]
+            self._cores = cores_left
+            if not self.indicator:
+
+                cores_right = build_cores_by_indices(self.indices[1], left_to_right=False)
+                try:
+                    core_val = self.mid_core
+                except:
+                    core_val = build_core_by_vals(self.funcs_vals, self.indices[2])
+                self._cores = cores_left + [core_val] + cores_right[::-1]
+
             if self.do_truncate:
                 self.truncate()
 
         return self._cores
 
     def core(self, n, skip_build=False):
-        #print(n, self.pos_val_core, self._cores is None)
         if self._cores is None or skip_build:
             d = self.d
             if   n < self.pos_val_core:
@@ -1239,11 +1264,12 @@ class tens(object):
                 return build_cores_by_indices([self.indices[1][d-1 - n]], left_to_right=False)[0]
             else:
                 try:
-                    #print('returning... mid_core')
                     return self.mid_core # mid_core does not midifyed during rounding
                 except:
-                    #print('failed. Building...')
-                    self.mid_core = build_core_by_vals(self.funcs_vals, self.indices[2])
+                    if self.indicator:
+                        self.mid_core = build_cores_by_indices([self.indices[0][d-1]], left_to_right=True)[0]
+                    else:
+                        self.mid_core = build_core_by_vals(self.funcs_vals, self.indices[2])
                     return self.mid_core
 
         else:
@@ -1258,18 +1284,29 @@ class tens(object):
     def index_revrse(self):
         self._indices = reindex(self._indices)
 
+
+    def truncate_indices(self, show_half=False):
+        self.indices[0] = reverse_idxs(reverse_idxs(self.indices[0], show=show_half))
+
+
     def shapes(self, func_shape=False):
         if func_shape:
-            return np.array([i.shape[0] for i in self.indices[0]] + [ len(self.funcs_vals) ] + [i.shape[0] for i in self.indices[1]][::-1])
+            if self.indicator:
+                return np.array([i.shape[0] for i in self.indices[0]])
+            else:
+                return np.array([i.shape[0] for i in self.indices[0]] + [ len(self.funcs_vals) ] + [i.shape[0] for i in self.indices[1]][::-1])
         else:
             return np.array([i.shape[1] for i in self.cores])
 
 
     def ranks(self, func_shape=False):
         if func_shape:
-            return np.array( [1] + [i.max() + 1 for i in self.indices[0]] + [i.max() + 1 for i in self.indices[1]][::-1] + [1] )
+            if self.indicator:
+                return np.array( [1] + [i.max() + 1 for i in self.indices[0]] )
+            else:
+                return np.array( [1] + [i.max() + 1 for i in self.indices[0]] + [i.max() + 1 for i in self.indices[1]][::-1] + [1] )
         else:
-            return np.array([1] + [G.shape[-1] for G in Y])
+            return np.array([1] + [G.shape[-1] for G in self.cores])
 
 
     @property
@@ -1338,9 +1375,8 @@ class tens(object):
             #print(G)
             for idxx in inds:
                 res_l = idxx.max() + 1
-                res = np.zeros(res_l)
+                res = np.zeros(res_l, dtype=int)
                 for idx in idxx:
-                    #res += TT_func_mat_vec(G, idx, res_l)
                     _, num_sum_cur = TT_func_mat_vec(G, idx, res)
                     num_op_sum += 2*num_sum_cur  # 2* because '+' and '*' there
                 #print(res)
@@ -1349,12 +1385,17 @@ class tens(object):
 
         t0 = []
         t0.append(tpc())
-        G0 = self.core(0, skip_build=True)
+        # G0 = self.core(0, skip_build=True)
+        G0 = np.array([[1]], dtype=int)
         t0.append(tpc()) #1
         G0, num_op_sum_cur = build_vec(self.indices[0], G0) if k > 0 else (np.array([[1]]), 0)
         t0.append(tpc()) #2
         num_op_sum += num_op_sum_cur
-        G1 = self.core(d - 1, skip_build=True)
+        self.num_op = num_op_sum
+        if self.indicator:
+            return G0.item()
+        # G1 = self.core(d - 1, skip_build=True)
+        G1 = np.array([[1]], dtype=int)
         t0.append(tpc()) #3
         G1, num_op_sum_cur  = build_vec(self.indices[1], G1, False) if k < d - 1 else (np.array([[1]]), 0)
         num_op_sum += num_op_sum_cur
@@ -1419,5 +1460,42 @@ def partial_mean(Y):
             G0 = G0 @ np.sum(G, axis=1)
 
         return G0
+
+
+def reverse_idxs(idxs, dtype=int, show=False):
+    d = len(idxs)
+    ranks = [1] + [i.max() + 1 for i in idxs]
+    def gen_f(i, pos, last):
+        idx = idxs[pos][i]
+        r = ranks[pos]
+        def f(x):
+            #res = [0]*r
+            res = np.zeros(r, dtype=dtype)
+            #x = np.array(x, dtype=int)
+            for i, elem in enumerate(idx):
+                if elem < 0:
+                    continue
+
+                res[i] += x[elem]
+            if last:
+                assert len(res) == 1
+                return res[0]
+
+            if (res == 0).all():
+                return None
+            return tuple(res.tolist())
+
+
+        return f
+
+
+    ff = [[gen_f(i, pos, pos==0)
+           for i, _ in enumerate(idxs[pos])]
+             for pos in range(d-1, -1, -1)]
+
+    tt = tens(ff, v_in=(1, ), indicator=True)
+    if show:
+        tt.show()
+    return tt.indices[0]
 
 
