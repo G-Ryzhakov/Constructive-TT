@@ -811,6 +811,7 @@ def reindex_None_all(idxs):
             idxs[i - 1] = idx_prev
 
     resort_first_idx(idxs)
+    resort_last_idx(idxs)
 
 def resort_first_idx(idxs):
     if len(idxs) < 2:
@@ -818,6 +819,27 @@ def resort_first_idx(idxs):
     idx = np.argsort(idxs[0][:, 0])
     idxs[0] = idxs[0][idx]
     idxs[1] = idxs[1][:, idx]
+
+def resort_last_idx(idxs):
+    if len(idxs) < 2:
+        return
+
+    arg = []
+    for ii in idxs[-1].T:
+        idx_w = np.where(ii > 0)[0]
+        if len(idx_w) > 0:
+            arg.append(idx_w[0])
+        else:
+            arg.append(len(ii))
+
+    idx = np.argsort(arg)
+    idxs[-1] = idxs[-1][:, idx]
+
+    idx_invs = np.empty_like(idx)
+    idx_invs[idx] = np.arange(idx.size)
+
+    mask = idxs[-2] >= 0
+    idxs[-2][mask] = idx_invs[idxs[-2][mask]]
 
 
 class tens(object):
