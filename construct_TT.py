@@ -826,7 +826,7 @@ def resort_last_idx(idxs):
 
     arg = []
     for ii in idxs[-1].T:
-        idx_w = np.where(ii > 0)[0]
+        idx_w = np.where(ii >= 0)[0]
         if len(idx_w) > 0:
             arg.append(idx_w[0])
         else:
