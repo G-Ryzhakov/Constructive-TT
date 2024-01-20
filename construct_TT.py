@@ -810,6 +810,16 @@ def reindex_None_all(idxs):
 
             idxs[i - 1] = idx_prev
 
+    resort_first_idx(idxs)
+
+def resort_first_idx(idxs):
+    if len(idxs) < 2:
+        return
+    idx = np.argsort(idxs[0][:, 0])
+    idxs[0] = idxs[0][idx]
+    idxs[1] = idxs[1][:, idx]
+
+
 class tens(object):
 
     def mat_mul(self, n, i, mat, direction=True, res=None):
@@ -1282,6 +1292,10 @@ class tens(object):
         self._cores = cores
 
     def index_revrse(self):
+        """
+        Heavy procedure
+        """
+
         self._indices = reindex(self._indices)
 
 
@@ -1351,6 +1365,7 @@ class tens(object):
             idxss = self.indices[n]
             if idxss:
                reindex_None_all(idxss)
+
 
 
     def simple_mean(self):
