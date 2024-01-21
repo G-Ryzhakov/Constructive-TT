@@ -13,19 +13,26 @@ class Sparse3D():
 
     def __getitem__(self, idx):
 
+        none_slice = slice(None, None, None)
         mats = self.mats
         try:
-            if isinstance(idx[0], slice) and isinstance(idx[2], slice):
-                idx = (idx[1], )
+            if isinstance(idx[0], slice) and isinstance(idx[2], slice) \
+                    and idx[0] = none_slice and idx[2] = none_slice:
+                return mats[idx[1]]
         except TypeError:
             pass
 
+        if len(idx) == 2:
+            idx = (idx[0], idx[1], none_slice)
+
         if len(idx) == 3:
             i, k, j = idx
-            return mats[k][i, j]
+            try:
+                k = int(k)
+            except:
+                raise ValueError(f"Bad index: {k}")
 
-        elif len(idx) == 1:
-            return mats[idx[0]]
+            return mats[k][i, j]
 
         raise
 
