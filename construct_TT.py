@@ -17,7 +17,7 @@ class Sparse3D():
         mats = self.mats
         try:
             if isinstance(idx[0], slice) and isinstance(idx[2], slice) \
-                    and idx[0] = none_slice and idx[2] = none_slice:
+                    and idx[0] == none_slice and idx[2] == none_slice:
                 return mats[idx[1]]
         except TypeError:
             pass
