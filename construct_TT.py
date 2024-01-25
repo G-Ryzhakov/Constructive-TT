@@ -118,7 +118,17 @@ class Sparse3D():
     def set_type(self, dtype):
         self.mats = [m.astype(dtype) for m in self.mats]
 
-    def to_alg(self, l2r=True, cstyle=True, info=None, brakets="()", extra_info=True):
+
+    def to_alg(self, l2r=True, cstyle=True, info=None, brakets="()", *, extra_info=True, letters='auo',
+               indim_rename=None, outdim_rename=False):
+
+
+        if len(letters) == 3 and cstyle:
+            la, lb, lo = letters
+        else:
+            la, lb = letters[:2]
+
+
         if l2r:
             mats = self.mats
         else:
@@ -130,8 +140,9 @@ class Sparse3D():
         r1, r2 = mats[0].shape
         res  = [[] for _ in range(r2)]
         a_list = []
+        out_list = []
         for i, m in enumerate(mats):
-            ss = f"u[{i}]*"
+            ss = f"{lb}[{i}]*"
             res_cur = dict()
             m = m.tocoo()
             for c, r, val in zip(m.col, m.row, m.data):
@@ -146,7 +157,13 @@ class Sparse3D():
                 if extra_info:
                     if not r in a_list:
                         a_list.append(r)
-                res_cur[c] = res_cur.get(c, []) + [f"a[{r}]" + addstr]
+
+                if not indim_rename is None:
+                    r = indim_rename[r]
+                    if r == -1:
+                        continue
+
+                res_cur[c] = res_cur.get(c, []) + [f"{la}[{r}]" + addstr]
 
             for c, vv in res_cur.items():
                 if len(vv) > 1:
@@ -155,26 +172,46 @@ class Sparse3D():
                     mn = vv[0]
 
                 res[c].append(ss + mn)
+                if c not in out_list:
+                    out_list.append(c)
 
         if extra_info:
-            in_dim = max(a_list) + 1
+            in_dim = max(a_list) + 1 if len(a_list) > 0 else 0
             info["in_dim"] = in_dim
             info["in_dim_missing"] = np.setdiff1d(np.arange(in_dim), a_list)
 
 
+        out_list_miss =  np.setdiff1d(np.arange(r2), out_list)
 
-        info["out_dim"] = len(res)
+        info["out_missing"] = out_list_miss
+        info["out_dim"] = r2 - len(out_list_miss)
+
+
+        if outdim_rename:
+            if len(out_list_miss) == 0:
+                outdim_rename_idx = None
+            else:
+                outdim_rename_idx = np.full(r2, -1)
+                for i, c in enumerate(out_list):
+                    outdim_rename_idx[c] = i
+
+            info["out_rename"] = outdim_rename_idx
+
         if cstyle:
             txt = ""
             for i, v in enumerate(res):
                 ll = " + ".join(v)
-                txt += f"o[{i}] = {ll};\n"
+                if outdim_rename and outdim_rename_idx is not None:
+                    i = outdim_rename_idx[i]
+                if i >= 0:
+                    txt += f"{lo}[{i}] = {ll};\n"
 
         else:
             txt = brakets[0]
             for i, v in enumerate(res):
                 ll = " + ".join(v)
-                txt += ll + ", "
+                if not outdim_rename or len(ll) > 0:
+                    txt += ll + ", "
 
             txt += brakets[1]
 
