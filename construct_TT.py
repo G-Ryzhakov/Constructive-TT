@@ -5,7 +5,7 @@ import scipy.sparse
 
 
 class Sparse3D():
-    def __init__(self, idx, dtype=float, mats=None):
+    def __init__(self, idx=None, dtype=float, mats=None):
         if mats is None:
             self.shape = idx
             i, j, k = idx
