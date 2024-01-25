@@ -76,6 +76,11 @@ class Sparse3D():
 
         return res
 
+    @property
+    def T(self):
+        return Sparse3D(mats=[ mm.T for mm in self.mats], dtype=self.dtype)
+
+
     def to_mat(self, full=False, dtype=None):
         if dtype is None:
             dtype = self.dtype
