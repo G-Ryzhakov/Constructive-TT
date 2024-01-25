@@ -40,7 +40,7 @@ class Sparse3D():
             try:
                 k = int(k)
             except TypeError:
-                Sparse3D(mats=[ mm[i, j] for mm in mats[k] ], dtype=self.dtype)
+                return Sparse3D(mats=[ mm[i, j] for mm in mats[k] ], dtype=self.dtype)
 
             return mats[k][i, j]
 
