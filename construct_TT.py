@@ -5,10 +5,17 @@ import scipy.sparse
 
 
 class Sparse3D():
-    def __init__(self, idx, dtype=float):
-        self.shape = idx
-        i, j, k = idx
-        self.mats = [scipy.sparse.lil_array((i, k), dtype=dtype) for _ in range(j)]
+    def __init__(self, idx, dtype=float, mats=None):
+        if mats is None:
+            self.shape = idx
+            i, j, k = idx
+            self.mats = [scipy.sparse.lil_array((i, k), dtype=dtype) for _ in range(j)]
+        else:
+            j = len(mats)
+            i, k = mats[0].shape
+            self.shape = i, j, k
+            self.mats = mats
+
         self.dtype = dtype
 
     def __getitem__(self, idx):
@@ -22,6 +29,9 @@ class Sparse3D():
         except TypeError:
             pass
 
+        if isinstance(idx, int):
+            return mats[idx]
+
         if len(idx) == 2:
             idx = (idx[0], idx[1], none_slice)
 
@@ -29,8 +39,8 @@ class Sparse3D():
             i, k, j = idx
             try:
                 k = int(k)
-            except:
-                raise ValueError(f"Bad index: {k}")
+            except TypeError:
+                Sparse3D(mats=[ mm[i, j] for mm in mats[k] ], dtype=self.dtype)
 
             return mats[k][i, j]
 
