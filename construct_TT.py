@@ -875,9 +875,16 @@ def reindex_None_all(idxs):
 def resort_first_idx(idxs):
     if len(idxs) < 2:
         return
-    idx = np.argsort(idxs[0][:, 0])
+    # idx = np.argsort(idxs[0][:, 0])
+    idx_minus = np.where(idxs[0][:, 0] < 0)[0]
+    idx_norm  = np.where(idxs[0][:, 0] >= 0)[0]
+    idx_srt_internal = np.argsort(idxs[0][idx_norm, 0])
+    idx_norm = idx_norm[idx_srt_internal]
+
+    idx = idx_norm if len(idx_minus) == 0 else np.concatinate((idx_minus, idx_norm))
+
     idxs[0] = idxs[0][idx]
-    idxs[1] = idxs[1][:, idx]
+    idxs[1] = idxs[1][:, idx_srt_internal]
 
 def resort_last_idx(idxs):
     if len(idxs) < 2:
