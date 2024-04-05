@@ -881,7 +881,7 @@ def resort_first_idx(idxs):
     idx_srt_internal = np.argsort(idxs[0][idx_norm, 0])
     idx_norm = idx_norm[idx_srt_internal]
 
-    idx = idx_norm if len(idx_minus) == 0 else np.concatinate((idx_minus, idx_norm))
+    idx = idx_norm if len(idx_minus) == 0 else np.concatenate((idx_norm, idx_minus))
 
     idxs[0] = idxs[0][idx]
     idxs[1] = idxs[1][:, idx_srt_internal]
