@@ -540,8 +540,8 @@ def show(N, R):
 
 def full(Y):
     """Returns the tensor in full format."""
-    Q = Y[0].copy()
-    for y in Y[:1]:
+    Q = Y[0]
+    for y in Y[1:]:
         Q = np.tensordot(Q, y, 1)
     return Q[0, ..., 0]
 
@@ -915,6 +915,11 @@ def resort_last_idx(idxs):
 
 
 class tens(object):
+
+
+    @property
+    def full(self):
+        return full(self.cores)
 
     def mat_mul(self, n, i, mat, direction=True, res=None):
         """
