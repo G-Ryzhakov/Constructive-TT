@@ -877,14 +877,20 @@ def resort_first_idx(idxs):
         return
     # idx = np.argsort(idxs[0][:, 0])
     idx_minus = np.where(idxs[0][:, 0] < 0)[0]
-    idx_norm  = np.where(idxs[0][:, 0] >= 0)[0]
-    idx_srt_internal = np.argsort(idxs[0][idx_norm, 0])
-    idx_norm = idx_norm[idx_srt_internal]
 
-    idx = idx_norm if len(idx_minus) == 0 else np.concatenate((idx_norm, idx_minus))
+    if len(idx_minus) == 0:
+        idx_srt_internal = idx = np.argsort(idxs[0][:, 0])
+    else:
+        idx_norm  = np.where(idxs[0][:, 0] >= 0)[0]
+        idx_srt_internal = np.argsort(idxs[0][idx_norm, 0])
+        idx_norm = idx_norm[idx_srt_internal]
+        idx = np.concatenate((idx_norm, idx_minus))
+
+        print(f"Warning, indices of the first core ({idx_minus}) are not in use. Consider to redefine tensor.")
 
     idxs[0] = idxs[0][idx]
     idxs[1] = idxs[1][:, idx_srt_internal]
+
 
 def resort_last_idx(idxs):
     if len(idxs) < 2:
