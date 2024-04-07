@@ -1551,28 +1551,70 @@ class tens(object):
             print(c[:, i, :])
 
 
-    def mul(t1, t2):
-        """
-        Hadamard multiply of two indices TT using only indices
-        """
+    def mul(self, other):
+        return mul(self, other)
 
-        assert t1.indicator and t2.indicator, "Use kron of cores to multiply common tensors"
+    def mul_full(self, other, *a, **k):
+        return mul_full(self, other, *a, **k)
 
-        ranks1 = t1.ranks(True)[:-1]
-        ranks2 = t2.ranks(True)
-        shapes = t1.shapes(True)
 
-        res = []
-        for r1, r2, n in zip(ranks1, ranks2[:-1], shapes):
-            res.append(np.full( [n, r1*r2], -1 ))
+def mul(t1, t2):
+    """
+    Hadamard multiply of two indices TT using only indices
+    Output shapes will be multipilication of the input tensor shapes
+    """
 
-        for idx_res, idx1, idx2, r in zip(res, t1.indices[0], t2.indices[0], ranks2[1:]):
-            for out, i1, i2 in zip(idx_res, idx1, idx2):
-                kron2idx(i1, i2, r, out)
+    assert t1.indicator and t2.indicator, "Use kron of cores to multiply common tensors"
 
-        full_clean_idx(res)
+    ranks1 = t1.ranks(True)[:-1]
+    ranks2 = t2.ranks(True)
+    shapes = t1.shapes(True)
 
-        return tens(gen_f_idxs(res), indices=[res, [], []], indicator=True, v_in=(1, ), debug=t1.debug, max_rank=t1.max_rank)
+    res = []
+    for r1, r2, n in zip(ranks1, ranks2[:-1], shapes):
+        res.append(np.full( [n, r1*r2], -1 ))
+
+    for idx_res, idx1, idx2, r in zip(res, t1.indices[0], t2.indices[0], ranks2[1:]):
+        for out, i1, i2 in zip(idx_res, idx1, idx2):
+            kron2idx(i1, i2, r, out)
+
+    full_clean_idx(res)
+
+    return tens(gen_f_idxs(res), indices=[res, [], []], indicator=True, v_in=(1, ), debug=t1.debug, max_rank=t1.max_rank)
+
+
+def mul_full(t1, t2, order="C", seq=False):
+    """
+    Hadamard multiply of two indices TT using only indices.
+    Output shapes will be multipilication of the input tensor shapes
+    """
+
+    assert t1.indicator and t2.indicator, "Use kron of cores to multiply common tensors"
+
+    ranks1 = t1.ranks(True)
+    ranks2 = t2.ranks(True)
+    shapes1 = t1.shapes(True)
+    shapes2 = t2.shapes(True)
+
+    res = []
+    for r1, r2, n1, n2 in zip(ranks1[:-1], ranks2[:-1], shapes1, shapes2):
+        res.append(np.full( [n1*n2, r1*r2], -1 ))
+
+    for idx_res, idx1, idx2, r2, r1, n1, n2 in zip(res, t1.indices[0], t2.indices[0], ranks2[1:], ranks1[1:], shapes1, shapes2):
+        #for out, i1, i2 in zip(idx_res, idx1, idx2):
+        for k, out in enumerate(idx_res):
+            if order == 'C':
+                i1, i2 = divmod(k, n2)
+            else:
+                i2, i1 = divmod(k, n1)
+            if seq:
+                kron2idx(idx1[i1], idx2[i2], r2, out)
+            else:
+                kron2idx(idx2[i2], idx1[i1], r1, out)
+
+    full_clean_idx(res)
+
+    return tens(gen_f_idxs(res), indices=[res, [], []], indicator=True, v_in=(1, ), debug=t1.debug, max_rank=t1.max_rank, do_None_clean=True)
 
 
 
@@ -1644,7 +1686,7 @@ def gen_f_idxs(idxs, dtype=int):
              for pos in range(d-1, -1, -1)]
 
 
-def reverse_idxs(idxs, dtype=int, show=False):
+def reverse_idxs(idxs, dtype=int, show=False, out_full_tensor=False):
     """
     reverse flow, expecting  truncation of thi
     """
@@ -1652,7 +1694,11 @@ def reverse_idxs(idxs, dtype=int, show=False):
     tt = tens(ff, v_in=(1, ), indicator=True)
     if show:
         tt.show()
-    return tt.indices[0]
+
+    if out_full_tensor:
+        return tt
+    else:
+        return tt.indices[0]
 
 
 def full_clean_idx(res):
