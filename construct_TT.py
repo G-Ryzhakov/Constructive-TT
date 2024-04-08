@@ -1078,6 +1078,7 @@ class tens(object):
                 idxx_a.append(idxx)
 
             if self.do_None_clean:
+                assert  len(idxx_a[0]) > 0, 'Derivative functions gives whole zero tensor. Not compatible with argument "do_None_clean=True"'
                 reindex_None_all(idxx_a)
             v_out_left = v_in
             return idxx_a, v_in
@@ -1703,7 +1704,7 @@ def reverse_idxs(idxs, dtype=int, show=False, out_full_tensor=False):
 
 def full_clean_idx(res):
     """
-    Sort of truncation if indices format
+    Sort of truncation in indices format
     """
     prev = np.array([0], dtype=int)
     for ir, rr in enumerate(res):
