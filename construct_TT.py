@@ -894,8 +894,8 @@ def resort_first_idx(idxs):
 
         print(f"Warning, indices of the first core ({idx_minus}) are not in use. Consider to redefine tensor.")
 
-    idxs[0] = idxs[0][idx]
-    idxs[1] = idxs[1][:, idx_srt_internal]
+    idxs[0] = idxs[0][idx_srt_internal]
+    idxs[1] = idxs[1][:, idx]
 
 
 
