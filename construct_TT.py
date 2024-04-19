@@ -1085,6 +1085,11 @@ class tens(object):
                 v_in, idxx = next_indices(func, v_in, max_rank=self.max_rank, relative_eps=self.relative_eps)
                 idxx_a.append(idxx)
 
+            idx_mid = np.copy(idxx_a[-1])
+            for i, val in enumerate(v_in):
+                # assert val in [0, 1]
+                idxx_a[-1][idx_mid==i] = val - 1
+
             if self.do_None_clean:
                 assert  len(idxx_a[0]) > 0, 'Derivative functions gives whole zero tensor. Not compatible with argument "do_None_clean=True"'
                 reindex_None_all(idxx_a)
@@ -1093,22 +1098,18 @@ class tens(object):
 
 
         idxx_a, v_out_left = build_i(self.funcs_left)
-        # self._indices.append(idxx_a)
 
         if self.indicator:
-            idx_mid = np.copy(idxx_a[-1])
-            for i, val in enumerate(v_out_left):
-                # assert val in [0, 1]
-                idxx_a[-1][idx_mid==i] = val - 1
+            self._indices = [idxx_a, [], []]
+            return self._indices 
 
-            self._indices.extend([idxx_a, [], []])
-        else:
-            self._indices.append(idxx_a)
 
-            idxx_a, v_out_right = build_i(self.funcs_right)
-            self._indices.append(idxx_a)
+        self._indices.append(idxx_a)
 
-            self._indices.append([v_out_left,  v_out_right])
+        idxx_a, v_out_right = build_i(self.funcs_right)
+        self._indices.append(idxx_a)
+
+        self._indices.append([v_out_left,  v_out_right])
 
         return  self._indices
 
