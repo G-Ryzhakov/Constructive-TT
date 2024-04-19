@@ -872,24 +872,31 @@ def reindex_None_all(idxs):
     resort_first_idx(idxs)
     resort_last_idx(idxs)
 
+
 def resort_first_idx(idxs):
     if len(idxs) < 2:
         return
-    # idx = np.argsort(idxs[0][:, 0])
+
     idx_minus = np.where(idxs[0][:, 0] < 0)[0]
+    N = idxs[0].shape[0]
 
     if len(idx_minus) == 0:
-        idx_srt_internal = idx = np.argsort(idxs[0][:, 0])
+        idx_srt_internal = np.argsort(idxs[0][:, 0])
+        idx = np.empty_like(idx_srt_internal)
+        idx[idx_srt_internal] = np.arange(N)
+
     else:
         idx_norm  = np.where(idxs[0][:, 0] >= 0)[0]
         idx_srt_internal = np.argsort(idxs[0][idx_norm, 0])
-        idx = np.arange(idxs[0].shape[0])
-        idx[idx_norm] = idx[idx_norm][idx_srt_internal]
+        idx = np.arange(N)
+        idx[np.arange(N)[idx_norm][idx_srt_internal]] = idx[idx_norm]
+        #idx[idx_norm] = idx[idx_norm][idx_srt_internal]
 
         print(f"Warning, indices of the first core ({idx_minus}) are not in use. Consider to redefine tensor.")
 
     idxs[0] = idxs[0][idx]
     idxs[1] = idxs[1][:, idx_srt_internal]
+
 
 
 def resort_last_idx(idxs):
@@ -1656,7 +1663,7 @@ def partial_mean(Y):
 
 def gen_f_idxs(idxs, dtype=int):
     """
-    Generate funcs that can generate the given idxs
+    Generate funcs that can generate the given idxs in reverse order
     """
     d = len(idxs)
     ranks = [1] + [i.max() + 1 for i in idxs]
