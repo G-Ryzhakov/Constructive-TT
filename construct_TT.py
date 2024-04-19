@@ -888,7 +888,7 @@ def resort_first_idx(idxs):
     N = idxs[0].shape[0]
 
     if len(idx_minus) == 0:
-        idx = np.argsort(idxs[0][:, 0])
+        idx = idx_srt_internal = np.argsort(idxs[0][:, 0])
 
     else:
         idx_norm  = np.where(idxs[0][:, 0] >= 0)[0]
@@ -899,7 +899,7 @@ def resort_first_idx(idxs):
         print(f"Warning, indices of the first core ({idx_minus}) are not in use. Consider to redefine tensor.")
 
     idxs[0] = idxs[0][idx]
-    idxs[1] = idxs[1][:, invert_idx(idx)]
+    idxs[1] = idxs[1][:, invert_idx(idx_srt_internal)]
 
 
 
