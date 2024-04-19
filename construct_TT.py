@@ -873,6 +873,13 @@ def reindex_None_all(idxs):
     resort_last_idx(idxs)
 
 
+def invert_idx(idx):
+    idx_invs = np.empty_like(idx)
+    idx_invs[idx] = np.arange(idx.size)
+    return idx_invs
+
+
+
 def resort_first_idx(idxs):
     if len(idxs) < 2:
         return
@@ -881,21 +888,18 @@ def resort_first_idx(idxs):
     N = idxs[0].shape[0]
 
     if len(idx_minus) == 0:
-        idx_srt_internal = np.argsort(idxs[0][:, 0])
-        idx = np.empty_like(idx_srt_internal)
-        idx[idx_srt_internal] = np.arange(N)
+        idx = np.argsort(idxs[0][:, 0])
 
     else:
         idx_norm  = np.where(idxs[0][:, 0] >= 0)[0]
         idx_srt_internal = np.argsort(idxs[0][idx_norm, 0])
         idx = np.arange(N)
-        idx[np.arange(N)[idx_norm][idx_srt_internal]] = idx[idx_norm]
-        #idx[idx_norm] = idx[idx_norm][idx_srt_internal]
+        idx[idx_norm] = idx[idx_norm][idx_srt_internal]
 
         print(f"Warning, indices of the first core ({idx_minus}) are not in use. Consider to redefine tensor.")
 
-    idxs[0] = idxs[0][idx_srt_internal]
-    idxs[1] = idxs[1][:, idx]
+    idxs[0] = idxs[0][idx]
+    idxs[1] = idxs[1][:, invert_idx(idx)]
 
 
 
@@ -914,11 +918,8 @@ def resort_last_idx(idxs):
     idx = np.argsort(arg)
     idxs[-1] = idxs[-1][:, idx]
 
-    idx_invs = np.empty_like(idx)
-    idx_invs[idx] = np.arange(idx.size)
-
     mask = idxs[-2] >= 0
-    idxs[-2][mask] = idx_invs[idxs[-2][mask]]
+    idxs[-2][mask] = invert_idx(idx)[idxs[-2][mask]]
 
 
 class tens(object):
