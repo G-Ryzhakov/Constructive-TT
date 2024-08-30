@@ -1019,7 +1019,8 @@ class tens(object):
 
     def __init__(self, funcs=None, *, indices=None, indicator=False,
                  do_reverse=False, do_truncate=False, do_None_clean=False,
-                 v_in=None, debug=True, relative_eps=None, max_rank=None):
+                 v_in=None, debug=True, relative_eps=None, max_rank=None,
+                 save_vin=False):
 
         self.indicator = False # no need in mid tensor, use only indices
         if type(funcs[0][0]) == list: # new
@@ -1065,7 +1066,9 @@ class tens(object):
 
         self.relative_eps = relative_eps
         self.max_rank = max_rank
-
+        self.save_vin = save_vin
+        if save_vin:
+            self._vins = []
 
     def p(self, mes):
         if self.debug:
@@ -1080,20 +1083,25 @@ class tens(object):
 
         def build_i(funcs):
             v_in = [self.v_in]
+            if self.save_vin:
+                self._vins.append(v_in)
             idxx_a = []
             for func in funcs:
                 v_in, idxx = next_indices(func, v_in, max_rank=self.max_rank, relative_eps=self.relative_eps)
                 idxx_a.append(idxx)
+                if self.save_vin:
+                    self._vins.append(v_in)
 
-            idx_mid = np.copy(idxx_a[-1])
-            for i, val in enumerate(v_in):
-                # assert val in [0, 1]
-                idxx_a[-1][idx_mid==i] = val - 1
+            if self.indicator:
+                idx_mid = np.copy(idxx_a[-1])
+                for i, val in enumerate(v_in):
+                    # assert val in [0, 1]
+                    idxx_a[-1][idx_mid==i] = val - 1
 
-            if self.do_None_clean:
-                assert  len(idxx_a[0]) > 0, 'Derivative functions gives whole zero tensor. Not compatible with argument "do_None_clean=True"'
-                reindex_None_all(idxx_a)
-            v_out_left = v_in
+                if self.do_None_clean:
+                    assert  len(idxx_a[0]) > 0, 'Derivative functions gives whole zero tensor. Not compatible with argument "do_None_clean=True"'
+                    reindex_None_all(idxx_a)
+            # v_out_left = v_in
             return idxx_a, v_in
 
 
@@ -1101,7 +1109,7 @@ class tens(object):
 
         if self.indicator:
             self._indices = [idxx_a, [], []]
-            return self._indices 
+            return self._indices
 
 
         self._indices.append(idxx_a)
